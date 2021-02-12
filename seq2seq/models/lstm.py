@@ -243,12 +243,17 @@ class LSTMDecoder(Seq2SeqDecoder):
 
         self.final_projection = nn.Linear(hidden_size, len(dictionary))
 
+        # yichao: enable cuda
+        use_cuda = torch.cuda.is_available()
+        self.device = torch.device("cuda" if use_cuda else "cpu")
+        
         self.use_lexical_model = use_lexical_model
         if self.use_lexical_model:
             # __QUESTION-5: Add parts of decoder architecture corresponding to the LEXICAL MODEL here
             # TODO: --------------------------------------------------------------------- CUT
             pass
             # TODO: --------------------------------------------------------------------- /CUT
+            
 
     def forward(self, tgt_inputs, encoder_out, incremental_state=None):
         """ Performs the forward pass through the instantiated model. """
@@ -281,9 +286,10 @@ class LSTMDecoder(Seq2SeqDecoder):
         if cached_state is not None:
             tgt_hidden_states, tgt_cell_states, input_feed = cached_state
         else:
-            tgt_hidden_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size) for i in range(len(self.layers))]
-            tgt_cell_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size) for i in range(len(self.layers))]
-            input_feed = tgt_embeddings.data.new(batch_size, self.hidden_size).zero_()
+            # yichao: enable cuda
+            tgt_hidden_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size).to(self.device) for i in range(len(self.layers))]
+            tgt_cell_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size).to(self.device) for i in range(len(self.layers))]
+            input_feed = tgt_embeddings.data.new(batch_size, self.hidden_size).zero_().to(self.device)
         '''___QUESTION-1-DESCRIBE-D-END___'''
 
         # Initialize attention output node
