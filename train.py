@@ -78,10 +78,16 @@ def main(args):
     train_dataset = load_data(split='train') if not args.train_on_tiny else load_data(split='tiny_train')
     valid_dataset = load_data(split='valid')
 
+    # yichao: enable cuda
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    print("===> Using %s" % device)
+    
     # Build model and optimization criterion
-    model = models.build_model(args, src_dict, tgt_dict)
+    # yichao: enable cuda
+    model = models.build_model(args, src_dict, tgt_dict).to(device)
     logging.info('Built a model with {:d} parameters'.format(sum(p.numel() for p in model.parameters())))
-    criterion = nn.CrossEntropyLoss(ignore_index=src_dict.pad_idx, reduction='sum')
+    criterion = nn.CrossEntropyLoss(ignore_index=src_dict.pad_idx, reduction='sum').to(device)
 
     # Instantiate optimizer and learning rate scheduler
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
@@ -93,7 +99,7 @@ def main(args):
     # Track validation performance for early stopping
     bad_epochs = 0
     best_validate = float('inf')
-
+        
     for epoch in range(last_epoch + 1, args.max_epoch):
         train_loader = \
             torch.utils.data.DataLoader(train_dataset, num_workers=1, collate_fn=train_dataset.collater,
@@ -121,6 +127,11 @@ def main(args):
             ___QUESTION-1-DESCRIBE-F-START___
             Describe what the following lines of code do.
             '''
+            # yichao: enable cuda
+            sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'], sample['tgt_tokens']= \
+                sample['src_tokens'].to(device), sample['src_lengths'].to(device),\
+                sample['tgt_inputs'].to(device), sample['tgt_tokens'].to(device)
+            
             output, _ = model(sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'])
 
             loss = \

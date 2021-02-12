@@ -8,7 +8,7 @@
 ###########
 
 # Activate Conda Environment [assuming your Miniconda installation is in your root directory]
-source ~/miniconda3/bin/activate nlu
+# source ~/miniconda3/bin/activate nlu
 
 # Define a location for all your experiments to save
 ROOT=$(git rev-parse --show-toplevel)
