@@ -26,8 +26,9 @@ class Seq2SeqModel(nn.Module):
 
 
 class Seq2SeqEncoder(nn.Module):
-    def __init__(self, dictionary):
+    def __init__(self, dictionary, device):
         super().__init__()
+        self.device = device
         self.dictionary = dictionary
 
     def forward(self, src_tokens, src_lengths):
@@ -35,8 +36,9 @@ class Seq2SeqEncoder(nn.Module):
 
 
 class Seq2SeqDecoder(nn.Module):
-    def __init__(self, dictionary):
+    def __init__(self, dictionary, device):
         super().__init__()
+        self.device = device
         self.dictionary = dictionary
 
     def forward(self, src_inputs, tgt_inputs, encoder_out):
