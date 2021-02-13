@@ -133,5 +133,5 @@ results/
 *.pyc
 *.cypthon-37.pyc
 .DS_Store
-*.ipynb
+# *.ipynb
 example.sh
