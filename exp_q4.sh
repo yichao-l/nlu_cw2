@@ -36,7 +36,6 @@ python train.py --save-dir "${EXP_ROOT}" \
                 --encoder-num-layers 2 \
                 --decoder-num-layers 3 \
                 --device "cpu" \
-                --train-on-tiny \
                 ### ADDITIONAL ARGUMENTS HERE ###
 
 ## Prediction step
