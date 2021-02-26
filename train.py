@@ -27,6 +27,8 @@ def get_args():
     parser.add_argument('--train-on-tiny', action='store_true', help='train model on a tiny dataset')
 
     # Add model arguments
+    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'], help='the device to carry out the training '
+                                                                                'either cpu or cuda aka gpu')
     parser.add_argument('--arch', default='lstm', choices=ARCH_MODEL_REGISTRY.keys(), help='model architecture')
 
     # Add optimization arguments
@@ -79,11 +81,11 @@ def main(args):
     valid_dataset = load_data(split='valid')
 
     # yichao: enable cuda
-    use_cuda = torch.cuda.is_available()
+    use_cuda = torch.cuda.is_available() and args.device == 'cuda'
     device = torch.device("cuda" if use_cuda else "cpu")
-#     device = torch.device("cpu")
+    #     device = torch.device("cpu")
     print("===> Using %s" % device)
-    
+
     # Build model and optimization criterion
     # yichao: enable cuda, i.e. add .to(device)
     model = models.build_model(args, src_dict, tgt_dict).to(device)
@@ -100,7 +102,7 @@ def main(args):
     # Track validation performance for early stopping
     bad_epochs = 0
     best_validate = float('inf')
-        
+
     for epoch in range(last_epoch + 1, args.max_epoch):
         train_loader = \
             torch.utils.data.DataLoader(train_dataset, num_workers=1, collate_fn=train_dataset.collater,
@@ -114,7 +116,7 @@ def main(args):
         stats['batch_size'] = 0
         stats['grad_norm'] = 0
         stats['clip'] = 0
-        
+
         # Display progress
         progress_bar = tqdm(train_loader, desc='| Epoch {:03d}'.format(epoch), leave=False, disable=False)
 
@@ -130,10 +132,10 @@ def main(args):
             Describe what the following lines of code do.
             '''
             # yichao: enable cuda
-            sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'], sample['tgt_tokens']= \
-                sample['src_tokens'].to(device), sample['src_lengths'].to(device),\
+            sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'], sample['tgt_tokens'] = \
+                sample['src_tokens'].to(device), sample['src_lengths'].to(device), \
                 sample['tgt_inputs'].to(device), sample['tgt_tokens'].to(device)
-            
+
             output, _ = model(sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'])
 
             loss = \
@@ -188,21 +190,21 @@ def validate(args, model, criterion, valid_dataset, epoch):
     stats['valid_loss'] = 0
     stats['num_tokens'] = 0
     stats['batch_size'] = 0
-    
+
     # yichao: enable cuda
-    use_cuda = torch.cuda.is_available()
+    use_cuda = torch.cuda.is_available() and args.device == 'cuda'
     device = torch.device("cuda" if use_cuda else "cpu")
-    
+
     # Iterate over the validation set
     for i, sample in enumerate(valid_loader):
         if len(sample) == 0:
             continue
         with torch.no_grad():
             # yichao: enable cuda
-            sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'], sample['tgt_tokens']= \
-                sample['src_tokens'].to(device), sample['src_lengths'].to(device),\
+            sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'], sample['tgt_tokens'] = \
+                sample['src_tokens'].to(device), sample['src_lengths'].to(device), \
                 sample['tgt_inputs'].to(device), sample['tgt_tokens'].to(device)
-            
+
             # Compute loss
             output, attn_scores = model(sample['src_tokens'], sample['src_lengths'], sample['tgt_inputs'])
             loss = criterion(output.view(-1, output.size(-1)), sample['tgt_tokens'].view(-1))

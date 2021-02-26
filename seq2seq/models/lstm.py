@@ -44,6 +44,10 @@ class LSTMModel(Seq2SeqModel):
         encoder_pretrained_embedding = None
         decoder_pretrained_embedding = None
 
+        # select the device to run the model on
+        use_cuda = torch.cuda.is_available() and args.device == 'cuda'
+        device = torch.device("cuda" if use_cuda else "cpu")
+
         # Load pre-trained embeddings, if desired
         if args.encoder_embed_path:
             encoder_pretrained_embedding = utils.load_embedding(args.encoder_embed_path, src_dict)
@@ -52,6 +56,7 @@ class LSTMModel(Seq2SeqModel):
 
         # Construct the encoder
         encoder = LSTMEncoder(dictionary=src_dict,
+                              device=device,
                               embed_dim=args.encoder_embed_dim,
                               hidden_size=args.encoder_hidden_size,
                               num_layers=args.encoder_num_layers,
@@ -62,6 +67,7 @@ class LSTMModel(Seq2SeqModel):
 
         # Construct the decoder
         decoder = LSTMDecoder(dictionary=tgt_dict,
+                              device=device,
                               embed_dim=args.decoder_embed_dim,
                               hidden_size=args.decoder_hidden_size,
                               num_layers=args.decoder_num_layers,
@@ -78,6 +84,7 @@ class LSTMEncoder(Seq2SeqEncoder):
 
     def __init__(self,
                  dictionary,
+                 device,
                  embed_dim=64,
                  hidden_size=64,
                  num_layers=1,
@@ -86,7 +93,7 @@ class LSTMEncoder(Seq2SeqEncoder):
                  dropout_out=0.25,
                  pretrained_embedding=None):
 
-        super().__init__(dictionary)
+        super().__init__(dictionary, device)
         self.num_layers = num_layers
         self.dropout_in = dropout_in
         self.dropout_out = dropout_out
@@ -144,6 +151,7 @@ class LSTMEncoder(Seq2SeqEncoder):
         if self.bidirectional:
             def combine_directions(outs):
                 return torch.cat([outs[0: outs.size(0): 2], outs[1: outs.size(0): 2]], dim=2)
+
             final_hidden_states = combine_directions(final_hidden_states)
             final_cell_states = combine_directions(final_cell_states)
         '''___QUESTION-1-DESCRIBE-A-END___'''
@@ -158,6 +166,7 @@ class LSTMEncoder(Seq2SeqEncoder):
 
 class AttentionLayer(nn.Module):
     """ Defines the attention layer class. Uses Luong's global attention with the general scoring function. """
+
     def __init__(self, input_dims, output_dims):
         super().__init__()
         # Scoring method is 'general'
@@ -212,6 +221,7 @@ class LSTMDecoder(Seq2SeqDecoder):
 
     def __init__(self,
                  dictionary,
+                 device,
                  embed_dim=64,
                  hidden_size=128,
                  num_layers=1,
@@ -221,7 +231,7 @@ class LSTMDecoder(Seq2SeqDecoder):
                  use_attention=True,
                  use_lexical_model=False):
 
-        super().__init__(dictionary)
+        super().__init__(dictionary, device)
 
         self.dropout_in = dropout_in
         self.dropout_out = dropout_out
@@ -243,17 +253,12 @@ class LSTMDecoder(Seq2SeqDecoder):
 
         self.final_projection = nn.Linear(hidden_size, len(dictionary))
 
-        # yichao: enable cuda
-        use_cuda = torch.cuda.is_available()
-        self.device = torch.device("cuda" if use_cuda else "cpu")
-        
         self.use_lexical_model = use_lexical_model
         if self.use_lexical_model:
             # __QUESTION-5: Add parts of decoder architecture corresponding to the LEXICAL MODEL here
             # TODO: --------------------------------------------------------------------- CUT
             pass
             # TODO: --------------------------------------------------------------------- /CUT
-            
 
     def forward(self, tgt_inputs, encoder_out, incremental_state=None):
         """ Performs the forward pass through the instantiated model. """
@@ -287,8 +292,10 @@ class LSTMDecoder(Seq2SeqDecoder):
             tgt_hidden_states, tgt_cell_states, input_feed = cached_state
         else:
             # yichao: enable cuda
-            tgt_hidden_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size).to(self.device) for i in range(len(self.layers))]
-            tgt_cell_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size).to(self.device) for i in range(len(self.layers))]
+            tgt_hidden_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size).to(self.device) for i in
+                                 range(len(self.layers))]
+            tgt_cell_states = [torch.zeros(tgt_inputs.size()[0], self.hidden_size).to(self.device) for i in
+                               range(len(self.layers))]
             input_feed = tgt_embeddings.data.new(batch_size, self.hidden_size).zero_().to(self.device)
         '''___QUESTION-1-DESCRIBE-D-END___'''
 
