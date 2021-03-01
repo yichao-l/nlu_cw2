@@ -195,9 +195,12 @@ class MultiHeadAttention(nn.Module):
                 attn_mask=None,
                 need_weights=True):
         '''
-        query, key, value (Tensor): dim: [src_time_steps, batch_size, num_features]
+        - query, key, value (Tensor): dim: [src_time_steps, batch_size, num_features]
+        - key_padding_mask (Tensor.bool): is given in the encoder layer and both the decoder layers
+        - attn_mask is given only in the first decoder layer
         '''
         # Get size features
+        # the 2 time steps size are different in the encoder-decoder attention sublayer
         tgt_time_steps, batch_size, embed_dim = query.size()
         src_time_steps, batch_size, embed_dim = key.size()
         assert self.embed_dim == embed_dim
@@ -207,27 +210,24 @@ class MultiHeadAttention(nn.Module):
         Implement Multi-Head attention  according to Section 3.2.2 of https://arxiv.org/pdf/1706.03762.pdf.
         Note that you will have to handle edge cases for best model performance. Consider what behaviour should
         be expected if attn_mask or key_padding_mask are given?
-        '''
-        # key_padding_mask is given in the encoder layer and second decoder layer
-        # attn_mask is given in the first decoder layer
-        
+        '''       
         # attn is the output of MultiHead(Q,K,V) in Vaswani et al. 2017
         # attn must be size [tgt_time_steps, batch_size, embed_dim]
         # attn_weights is the combined output of h parallel heads of Attention(Q,K,V) in Vaswani et al. 2017
         # attn_weights must be size [num_heads, batch_size, tgt_time_steps, key.size(0)]
-        # TODO: REPLACE THESE LINES WITH YOUR IMPLEMENTATION ------------------------ CUT
-        # attn = torch.zeros(size=(tgt_time_steps, batch_size, embed_dim))
-        # attn_weights = torch.zeros(size=(self.num_heads, batch_size, tgt_time_steps, -1)) if need_weights else None
-        # TODO: --------------------------------------------------------------------- CUT
+
         # 1. Linear projection of Query, Key and Value. 
         # This is done for all heads in a single operation.
         # QW^Q in the paper for all i, concatnated, as in section 3.2.2 Vaswani et al.
+        if src_time_steps != tgt_time_steps:
+            breakpoint()
         queries = self.q_proj(query).\
                     view(tgt_time_steps,batch_size,self.num_heads,self.head_embed_size)
         keys = self.k_proj(key).\
                     view(src_time_steps,batch_size,self.num_heads,self.head_embed_size)
         values = self.v_proj(value).\
                     view(src_time_steps,batch_size,self.num_heads,self.head_embed_size)
+        
         # 2. Computing scaled dot-product attention for h attention heads.
         # transform q,k,v dim to:
         # [tgt_time_steps, batch_size * self.num_heads, self.head_embed_size]
@@ -252,19 +252,22 @@ class MultiHeadAttention(nn.Module):
         # k should be in the order: sent1 head1, sent1 head2,..., sentN head1, sentN head2...
         dot = torch.bmm(queries, keys.transpose(1, 2))
         
-        # use mask
+        # apply the masks
         if key_padding_mask is not None:
+            # duplicate the key_padding_mask for each heads and each tgt_time_steps
             mask = torch.repeat_interleave(key_padding_mask, 
                                            self.num_heads * tgt_time_steps,
                                            dim=0)
+            # transform it to be of the same shape as the dot matrix
             mask = mask.view(batch_size * self.num_heads, tgt_time_steps, src_time_steps)
+            # apply the mask
             dot[mask] = float('-inf')
         if attn_mask is not None:
             dot = dot + attn_mask
         
         dot = F.softmax(dot, dim=2)
         
-        # weighted sum
+        # weighted sum of the values
         out = torch.bmm(dot, values).\
                 view(batch_size, self.num_heads, tgt_time_steps, self.head_embed_size)
         
@@ -276,7 +279,8 @@ class MultiHeadAttention(nn.Module):
         # should the weights be batch_size, num_heads? Or the other way around?
         attn_weights = dot.\
                 view(batch_size, self.num_heads, tgt_time_steps, src_time_steps).\
-                transpose(0,1) if need_weights else None
+                transpose(0,1) \
+                if need_weights else None
         '''
         ___QUESTION-7-MULTIHEAD-ATTENTION-END
         '''
