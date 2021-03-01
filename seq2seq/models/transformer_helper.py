@@ -219,8 +219,6 @@ class MultiHeadAttention(nn.Module):
         # 1. Linear projection of Query, Key and Value. 
         # This is done for all heads in a single operation.
         # QW^Q in the paper for all i, concatnated, as in section 3.2.2 Vaswani et al.
-        if src_time_steps != tgt_time_steps:
-            breakpoint()
         queries = self.q_proj(query).\
                     view(tgt_time_steps,batch_size,self.num_heads,self.head_embed_size)
         keys = self.k_proj(key).\
