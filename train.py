@@ -83,7 +83,6 @@ def main(args):
     # yichao: enable cuda
     use_cuda = torch.cuda.is_available() and args.device == 'cuda'
     device = torch.device("cuda" if use_cuda else "cpu")
-    #     device = torch.device("cpu")
     print("===> Using %s" % device)
 
     # Build model and optimization criterion

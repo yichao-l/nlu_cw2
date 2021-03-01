@@ -3,6 +3,7 @@ import logging
 import argparse
 import numpy as np
 from tqdm import tqdm
+import pdb
 
 import torch
 from torch.serialization import default_restore_location
@@ -15,7 +16,8 @@ from seq2seq.data.dataset import Seq2SeqDataset, BatchSampler
 def get_args():
     """ Defines generation-specific hyper-parameters. """
     parser = argparse.ArgumentParser('Sequence to Sequence Model')
-    parser.add_argument('--cuda', default=False, help='Use a GPU')
+    parser.add_argument('--device', default='cpu', choices=['cpu', 'cuda'], help='the device to carry out the training ')
+    # parser.add_argument('--cuda', default=False, help='Use a GPU')
     parser.add_argument('--seed', default=42, type=int, help='pseudo random number generator seed')
 
     # Add data arguments
@@ -55,8 +57,11 @@ def main(args):
                                                                          seed=args.seed))
     # Build model and criterion
     model = models.build_model(args, src_dict, tgt_dict)
-    if args.cuda:
-        model = model.cuda()
+    if args.device=="cuda":
+        device = torch.device("cuda")
+        model = model.to(device)
+    else:
+        device = torch.device("cpu")
     model.eval()
     model.load_state_dict(state_dict['model'])
     logging.info('Loaded a model from checkpoint {:s}'.format(args.checkpoint_path))
@@ -66,6 +71,8 @@ def main(args):
     all_hyps = {}
     for i, sample in enumerate(progress_bar):
         with torch.no_grad():
+            sample['src_tokens'], sample['src_lengths'] = sample['src_tokens'].to(device),\
+                                                              sample['src_lengths'].to(device)
             # Compute the encoder output
             encoder_out = model.encoder(sample['src_tokens'], sample['src_lengths'])
             go_slice = \
@@ -85,7 +92,7 @@ def main(args):
             prev_words = torch.cat([go_slice, next_words], dim=1)
 
         # Segment into sentences
-        decoded_batch = next_words.numpy()
+        decoded_batch = next_words.cpu().numpy()
         output_sentences = [decoded_batch[row, :] for row in range(decoded_batch.shape[0])]
         assert(len(output_sentences) == len(sample['id'].data))
 

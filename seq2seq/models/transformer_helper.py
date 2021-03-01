@@ -2,6 +2,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pdb
 
 from seq2seq import utils
 
@@ -34,6 +35,7 @@ class TransformerEncoderLayer(nn.Module):
         be after multi-head attention? HINT: formulate your  answer in terms of 
         constituent variables like batch_size, embed_dim etc...
         '''
+        # state Tensor: dim: [src_time_steps, batch_size, num_features]
         state, _ = self.self_attn(query=state, key=state, value=state, key_padding_mask=encoder_padding_mask)
         '''
         ___QUESTION-6-DESCRIBE-D-END___
@@ -155,7 +157,7 @@ class MultiHeadAttention(nn.Module):
         You shouldn't need to change the __init__ of this class for your attention implementation
         '''
         super().__init__()
-        self.embed_dim = embed_dim
+        self.embed_dim = embed_dim # d_model in the paper?
         self.k_embed_size = kdim if kdim else embed_dim
         self.v_embed_size = vdim if vdim else embed_dim
 
@@ -192,9 +194,15 @@ class MultiHeadAttention(nn.Module):
                 key_padding_mask=None,
                 attn_mask=None,
                 need_weights=True):
-
+        '''
+        - query, key, value (Tensor): dim: [src_time_steps, batch_size, num_features]
+        - key_padding_mask (Tensor.bool): is given in the encoder layer and both the decoder layers
+        - attn_mask is given only in the first decoder layer
+        '''
         # Get size features
+        # the 2 time steps size are different in the encoder-decoder attention sublayer
         tgt_time_steps, batch_size, embed_dim = query.size()
+        src_time_steps, batch_size, embed_dim = key.size()
         assert self.embed_dim == embed_dim
 
         '''
@@ -202,17 +210,75 @@ class MultiHeadAttention(nn.Module):
         Implement Multi-Head attention  according to Section 3.2.2 of https://arxiv.org/pdf/1706.03762.pdf.
         Note that you will have to handle edge cases for best model performance. Consider what behaviour should
         be expected if attn_mask or key_padding_mask are given?
-        '''
-
+        '''       
         # attn is the output of MultiHead(Q,K,V) in Vaswani et al. 2017
         # attn must be size [tgt_time_steps, batch_size, embed_dim]
         # attn_weights is the combined output of h parallel heads of Attention(Q,K,V) in Vaswani et al. 2017
         # attn_weights must be size [num_heads, batch_size, tgt_time_steps, key.size(0)]
-        # TODO: REPLACE THESE LINES WITH YOUR IMPLEMENTATION ------------------------ CUT
-        attn = torch.zeros(size=(tgt_time_steps, batch_size, embed_dim))
-        attn_weights = torch.zeros(size=(self.num_heads, batch_size, tgt_time_steps, -1)) if need_weights else None
-        # TODO: --------------------------------------------------------------------- CUT
 
+        # 1. Linear projection of Query, Key and Value. 
+        # This is done for all heads in a single operation.
+        # QW^Q in the paper for all i, concatnated, as in section 3.2.2 Vaswani et al.
+        queries = self.q_proj(query).\
+                    view(tgt_time_steps,batch_size,self.num_heads,self.head_embed_size)
+        keys = self.k_proj(key).\
+                    view(src_time_steps,batch_size,self.num_heads,self.head_embed_size)
+        values = self.v_proj(value).\
+                    view(src_time_steps,batch_size,self.num_heads,self.head_embed_size)
+        
+        # 2. Computing scaled dot-product attention for h attention heads.
+        # transform q,k,v dim to:
+        # [tgt_time_steps, batch_size * self.num_heads, self.head_embed_size]
+        # and transpose(0,1) such that `tgt_time_steps` and `self.head_embed_size` 
+        # are next to each other for the dot product.
+        
+        # transform q, k, v
+        queries = queries.\
+            view(tgt_time_steps, batch_size * self.num_heads, self.head_embed_size).\
+            transpose(0,1)
+        keys = keys.\
+            view(src_time_steps, batch_size * self.num_heads, self.head_embed_size).\
+            transpose(0,1)
+        values = values.\
+            view(src_time_steps, batch_size * self.num_heads, self.head_embed_size).\
+            transpose(0,1)
+        # scale
+        queries = queries / math.sqrt(self.head_scaling)
+        keys = keys / math.sqrt(self.head_scaling)
+        # dot product:
+        # the results each dot[k,:,:] as a matrix where i, j being to dot(query i, key j)
+        # k should be in the order: sent1 head1, sent1 head2,..., sentN head1, sentN head2...
+        dot = torch.bmm(queries, keys.transpose(1, 2))
+        
+        # apply the masks
+        if key_padding_mask is not None:
+            # duplicate the key_padding_mask for each heads and each tgt_time_steps
+            mask = torch.repeat_interleave(key_padding_mask, 
+                                           self.num_heads * tgt_time_steps,
+                                           dim=0)
+            # transform it to be of the same shape as the dot matrix
+            mask = mask.view(batch_size * self.num_heads, tgt_time_steps, src_time_steps)
+            # apply the mask
+            dot[mask] = float('-inf')
+        if attn_mask is not None:
+            dot = dot + attn_mask
+        
+        dot = F.softmax(dot, dim=2)
+        
+        # weighted sum of the values
+        out = torch.bmm(dot, values).\
+                view(batch_size, self.num_heads, tgt_time_steps, self.head_embed_size)
+        
+        # 3. Concatenation of heads and output projection.
+        out = out.transpose(1,2).contiguous().\
+                view(batch_size, tgt_time_steps, self.num_heads * self.head_embed_size)
+        out = out.transpose(0,1)
+        attn = self.out_proj(out)
+        # should the weights be batch_size, num_heads? Or the other way around?
+        attn_weights = dot.\
+                view(batch_size, self.num_heads, tgt_time_steps, src_time_steps).\
+                transpose(0,1) \
+                if need_weights else None
         '''
         ___QUESTION-7-MULTIHEAD-ATTENTION-END
         '''

@@ -35,13 +35,14 @@ python train.py --save-dir "${EXP_ROOT}" \
                 --data "${DATA_DIR}" \
                 --encoder-num-layers 2 \
                 --decoder-num-layers 3 \
-                --device "cpu" \
+                --device "cuda"
                 ### ADDITIONAL ARGUMENTS HERE ###
 
 ## Prediction step
 python translate.py \
     --checkpoint-path "${EXP_ROOT}/checkpoint_best.pt" \
-    --output "${TEST_EN_PRED}"
+    --output "${TEST_EN_PRED}" \
+    --device "cpu" 
 
 ## Calculate BLEU score for model outputs
 perl multi-bleu.perl -lc ${TEST_EN_GOLD} < ${TEST_EN_PRED} | tee "${EXP_ROOT}/bleu.txt"
