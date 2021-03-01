@@ -105,6 +105,7 @@ class LSTMEncoder(Seq2SeqEncoder):
             self.embedding = pretrained_embedding
         else:
             self.embedding = nn.Embedding(len(dictionary), embed_dim, dictionary.pad_idx)
+            print(len(dictionary), embed_dim)
 
         dropout_lstm = dropout_out if num_layers > 1 else 0.
         self.lstm = nn.LSTM(input_size=embed_dim,
@@ -257,7 +258,8 @@ class LSTMDecoder(Seq2SeqDecoder):
         if self.use_lexical_model:
             # __QUESTION-5: Add parts of decoder architecture corresponding to the LEXICAL MODEL here
             # TODO: --------------------------------------------------------------------- CUT
-            pass
+            self.lexical_intermediate_projection = nn.Linear(embed_dim, embed_dim)
+            self.lexical_final_projection = nn.Linear(embed_dim, len(dictionary))
             # TODO: --------------------------------------------------------------------- /CUT
 
     def forward(self, tgt_inputs, encoder_out, incremental_state=None):
@@ -333,7 +335,9 @@ class LSTMDecoder(Seq2SeqDecoder):
                 if self.use_lexical_model:
                     # __QUESTION-5: Compute and collect LEXICAL MODEL context vectors here
                     # TODO: --------------------------------------------------------------------- CUT
-                    pass
+                    step_attn_weights = step_attn_weights.unsqueeze(1)
+                    lexical_scores = torch.tanh(torch.bmm(step_attn_weights, src_embeddings.transpose(0, 1))).squeeze(dim=1)
+                    lexical_contexts.append(torch.tanh(self.lexical_intermediate_projection(lexical_scores)) + lexical_scores)
                     # TODO: --------------------------------------------------------------------- /CUT
 
             input_feed = F.dropout(input_feed, p=self.dropout_out, training=self.training)
@@ -356,7 +360,8 @@ class LSTMDecoder(Seq2SeqDecoder):
         if self.use_lexical_model:
             # __QUESTION-5: Incorporate the LEXICAL MODEL into the prediction of target tokens here
             # TODO: --------------------------------------------------------------------- CUT
-            pass
+            lexical_contexts = torch.cat(lexical_contexts, dim=0).view(batch_size, tgt_time_steps, -1)
+            decoder_output += self.lexical_final_projection(lexical_contexts)
             # TODO: --------------------------------------------------------------------- /CUT
 
         return decoder_output, attn_weights
