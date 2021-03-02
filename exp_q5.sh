@@ -34,7 +34,7 @@ python train.py --save-dir "${EXP_ROOT}" \
                 --log-file "${EXP_ROOT}/log.out"  \
                 --data "${DATA_DIR}" \
                 --decoder-use-lexical-model "True" \
-                --device "cuda" \
+                --device "cpu" \
                 ### ADDITIONAL ARGUMENTS HERE ###
 
 ## Prediction step
