@@ -5,6 +5,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import pdb
 
 from seq2seq.models import Seq2SeqModel, Seq2SeqEncoder, Seq2SeqDecoder
 from seq2seq.models import register_model, register_model_architecture
@@ -52,9 +53,13 @@ class TransformerModel(Seq2SeqModel):
         if getattr(args, 'max_target_positions', None) is None:
             args.max_tgt_positions = DEFAULT_MAX_TARGET_POSITIONS
 
+        # select the device to run the model on
+        use_cuda = torch.cuda.is_available() and args.device == 'cuda'
+        device = torch.device("cuda" if use_cuda else "cpu")
+        
         # Transformer Encoder
-        encoder = TransformerEncoder(args, src_dict)
-        decoder = TransformerDecoder(args, tgt_dict)
+        encoder = TransformerEncoder(args, src_dict, device=device)
+        decoder = TransformerDecoder(args, tgt_dict, device=device)
         return cls(args, encoder, decoder)
 
 
@@ -63,9 +68,10 @@ class TransformerEncoder(Seq2SeqEncoder):
 
     def __init__(self,
                  args,
-                 dictionary):
+                 dictionary,
+                 device):
 
-        super().__init__(dictionary)
+        super().__init__(dictionary, device)
 
         self.dropout = args.dropout
         self.embed_dim = args.encoder_embed_dim
@@ -87,6 +93,10 @@ class TransformerEncoder(Seq2SeqEncoder):
         ])
 
     def forward(self, src_tokens, src_lengths):
+        '''
+        src_tokens Tensor.int64: [batch_size x num_tokens]
+        src_length Tensor.int64: [batch_size] legnth of each sequence
+        '''
         # Embed tokens indices
         embeddings = self.embed_scale * self.embedding(src_tokens)
 
@@ -98,6 +108,7 @@ class TransformerEncoder(Seq2SeqEncoder):
         What is the purpose of the positional embeddings in the encoder and decoder? Why can't we use only
         the embeddings similar to for the LSTM? 
         '''
+        # embeddings: [batch_size, src_time_steps x num_featuers], e.g. [10, 20, 128]
         embeddings += self.embed_positions(src_tokens)
         '''
         ___QUESTION-6-DESCRIBE-A-END___
@@ -108,6 +119,7 @@ class TransformerEncoder(Seq2SeqEncoder):
         forward_state = forward_state.transpose(0, 1)
 
         # Compute padding mask for attention
+        # A Tensor of bools where it's True if that position is padded
         encoder_padding_mask = src_tokens.eq(self.padding_idx)
         if not encoder_padding_mask.any():
             encoder_padding_mask = None
@@ -128,9 +140,10 @@ class TransformerDecoder(Seq2SeqDecoder):
     """ Defines an decoder class. """
     def __init__(self,
                  args,
-                 dictionary):
+                 dictionary,
+                 device):
 
-        super().__init__(dictionary)
+        super().__init__(dictionary, device)
         self.dropout = args.dropout
         self.embed_dim = args.decoder_embed_dim
         self.output_embed_dim = args.decoder_embed_dim

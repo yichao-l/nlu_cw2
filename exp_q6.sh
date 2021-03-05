@@ -16,7 +16,7 @@ RESULTS_ROOT="${ROOT}/results"
 mkdir -p ${RESULTS_ROOT}
 
 ### NAME YOUR EXPERIMENT HERE ##
-EXP_NAME="baseline"
+EXP_NAME="q6_transformer"
 ################################
 
 ## Local variables for current experiment
@@ -30,7 +30,8 @@ mkdir -p ${EXP_ROOT}
 python train.py --save-dir "${EXP_ROOT}" \
                 --log-file "${EXP_ROOT}/log.out"  \
                 --data "${DATA_DIR}" \
-                --device "cuda"
+                --device "cuda" \
+                --arch "transformer" \
                 ### ADDITIONAL ARGUMENTS HERE ###
 
 ## Prediction step
