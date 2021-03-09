@@ -259,7 +259,7 @@ class MultiHeadAttention(nn.Module):
             # transform it to be of the same shape as the dot matrix
             mask = mask.view(batch_size * self.num_heads, tgt_time_steps, src_time_steps)
             # apply the mask
-            dot[mask] = float('-inf')
+            dot[mask] = float('-1e9')
         if attn_mask is not None:
             dot = dot + attn_mask
         
@@ -268,6 +268,7 @@ class MultiHeadAttention(nn.Module):
         # weighted sum of the values
         out = torch.bmm(dot, values).\
                 view(batch_size, self.num_heads, tgt_time_steps, self.head_embed_size)
+        out = F.dropout(out, p=self.attention_dropout, training=self.training)
         
         # 3. Concatenation of heads and output projection.
         out = out.transpose(1,2).contiguous().\
