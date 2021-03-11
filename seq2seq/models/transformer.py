@@ -107,6 +107,13 @@ class TransformerEncoder(Seq2SeqEncoder):
         ___QUESTION-6-DESCRIBE-A-START___
         What is the purpose of the positional embeddings in the encoder and decoder? Why can't we use only
         the embeddings similar to for the LSTM? 
+        
+        
+        Positional embeddings help the encoder and decoder to make use of the order of the sequence; 
+        without them, the self-attention mechanism is equivariant w.r.t. permutations in the inputs. 
+        We can't use only the embeddings similar to the LSTM due to the lack of the recurrence dynamics
+         in transformers as found in LSTMs, which makes use of the order information.
+        
         '''
         # embeddings: [batch_size, src_time_steps x num_featuers], e.g. [10, 20, 128]
         embeddings += self.embed_positions(src_tokens)
@@ -200,6 +207,17 @@ class TransformerDecoder(Seq2SeqDecoder):
             ___QUESTION-6-DESCRIBE-B-START___
             What is the purpose of self_attn_mask? Why do we need it in the decoder but not in the encoder?
             Why do we not need a mask for incremental decoding?
+            
+            Masking is used to prevent the self-attention mechanism to attend to the future 
+            inputs on the right side of the current output position, i.e. to preserve the 
+            auto-regressive property of the model. 
+            It's not used in the encoder because the encoder is not attempting to generate but to 
+            encode and combine information from the tokens across the sentence.
+            In the incremental decoding setting, the decoder generates the output at one timestep 
+            using the latent vector from the encoder and the words it has generated, where the decoder
+             
+            where the output sequence including and after the current decoder timestep (which are also
+             used as decoder inputs) hasn't been generated yet. Hence there's no need to mask them.
             '''
             self_attn_mask = self.buffered_future_mask(forward_state) if incremental_state is None else None
             '''
@@ -228,6 +246,15 @@ class TransformerDecoder(Seq2SeqDecoder):
             ___QUESTION-6-DESCRIBE-C-START___
             Why do we need a linear projection after the decoder layers? What is the dimensionality of forward_state
             after this line? What would the output represent if features_only=True?
+            
+            
+            The linear projection transforms the output features to a distribution over the target 
+            vocabularies.
+
+            The dimension of forward_state would be batch_size * max_target_timesteps * target_vocabulary_size.
+            If features_only=True, the output would represent the feature representations at each timestep 
+            generated from the transformer decoder, after the decoder self-attention, ``encoder-decoder 
+            attention", and the feed-forward networks.
             '''
             forward_state = self.embed_out(forward_state)
             '''

@@ -148,6 +148,11 @@ class LSTMEncoder(Seq2SeqEncoder):
         ___QUESTION-1-DESCRIBE-A-START___
         Describe what happens when self.bidirectional is set to True. 
         What is the difference between final_hidden_states and final_cell_states?
+        
+        
+        two LSTMs are used to encode the input; one running from the beginning of the sentence 
+        to the end, the other from the end to the start. The final-step outputs from the two 
+        encoders are concatenated to generate the final hidden/cell state.
         '''
         if self.bidirectional:
             def combine_directions(outs):
@@ -189,6 +194,16 @@ class AttentionLayer(nn.Module):
         '''
         ___QUESTION-1-DESCRIBE-B-START___
         Describe how the attention context vector is calculated. Why do we need to apply a mask to the attention scores?
+        
+        
+        The attention context vector is calculated from a convex combination of the encoder
+         outputs at every timestep, weighted by the attention weights. 
+
+        % why do we need a mask?
+        The mask is needed because sentences in a batch are of varying length, thus 
+        the shorter ones are padded to the equal length as the longest sentences. But we
+         would not want to attend to the padding when computing the context vector, hence 
+         they are masked with zeros.
         '''
         if src_mask is not None:
             src_mask = src_mask.unsqueeze(dim=1)
@@ -210,6 +225,16 @@ class AttentionLayer(nn.Module):
         ___QUESTION-1-DESCRIBE-C-START___
         How are attention scores calculated? What role does matrix multiplication (i.e. torch.bmm()) play 
         in aligning encoder and decoder representations?
+        
+        The attention scores $a_{t,j}$ are computed for each sentence, by taking the dot product
+         between the current decoder hidden state $\h^{dec}_t$ and the linear transformed encoder 
+         hidden state at each input timestep $j$, $\h^{enc}_j$.
+
+        torch.bmm() applies the dot product described above, between the current decoding 
+        representation and every encoder representation, for all sentences in a batch, resulting
+         in an attention tensor of size: 
+        $\mathrm{batch\_size} \times 1 \times \mathrm{max\_input\_sentence\_length}$.
+        
         '''
         projected_encoder_out = self.src_projection(encoder_out).transpose(2, 1)
         attn_scores = torch.bmm(tgt_input.unsqueeze(dim=1), projected_encoder_out)
@@ -289,6 +314,17 @@ class LSTMDecoder(Seq2SeqDecoder):
         '''
         ___QUESTION-1-DESCRIBE-D-START___
         Describe how the decoder state is initialized. When is cached_state == None? What role does input_feed play?
+        
+        
+        The decoder state is initialized as a tensor of zeros of the size:
+            batch_size * size_hidden_layer.
+
+            cached_state==None when incremental_state ==None or when the cached state of the 
+            current module does not exist in the current incremental_state.
+
+            input_feed stores either the previous hidden decoder state or when attention is used, 
+            the attention context vector. And it is initialized to zeros at the first decoding time 
+            step.
         '''
         cached_state = utils.get_incremental_state(self, incremental_state, 'cached_state')
         if cached_state is not None:
@@ -310,7 +346,7 @@ class LSTMDecoder(Seq2SeqDecoder):
         # Cache lexical context vectors per translation time-step
         lexical_contexts = []
         # this will make the src_embeddings shape (batch_size, src_time_steps, src_embedding_size)
-        src_embeddings = src_embeddings.transpose(0,1)
+        src_embeddings = src_embeddings.transpose(0, 1)
         for j in range(tgt_time_steps):
             # Concatenate the current token embedding with output from previous time step (i.e. 'input feeding')
             lstm_input = torch.cat([tgt_embeddings[j, :, :], input_feed], dim=1)
@@ -327,6 +363,16 @@ class LSTMDecoder(Seq2SeqDecoder):
             ___QUESTION-1-DESCRIBE-E-START___
             How is attention integrated into the decoder? Why is the attention function given the previous 
             target state as one of its inputs? What is the purpose of the dropout layer?
+            
+            Attention is integrated into the decoder when the self.attention attribute is set
+             true; the attention context vector will be computed using the AttentionLayer
+              Module defined above, taking as input the last decoder hidden states, all encoder 
+              outputs, and encoder input masks as described in Comment B.
+
+            It takes in the previous target state to compute the attention scores.
+
+            Dropout is used for regularization and to prevent the weights' co-adaptation
+            
             '''
             if self.attention is None:
                 input_feed = tgt_hidden_states[-1]
